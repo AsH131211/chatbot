@@ -1,9 +1,9 @@
 import os
-GROQ_API = os.environ["GROQ_API"]
 GEMINI_API = os.environ["GEMINI_API"]
 
-MODEL1 = "llama-3.3-70b-versatile"
-MODEL2 = "gemini-3.5-flash-lite"
+MODEL1 = "gemini-3.5-flash-lite"   
+MODEL2 = "gemini-3.6-flash" 
+
 
 TEMPERATURE = 0.7
 

@@ -3,7 +3,7 @@ def build_context(messages):
     context = [
         {
             "role": "system",
-            "content": "You are Jarvis, a helpful AI assistant."
+            "content": "You are Jarvis, a helpful AI assistant like the jarvis in ironman."
         }
     ]
 

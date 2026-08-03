@@ -10,8 +10,8 @@ Jarvis is a personal learning project that explores how modern AI assistants lik
 
 - 💬 Interactive terminal chatbot
 - 🧠 Conversation history
-- ⚡ Groq (Llama 3.3 70B) integration
-- 🔄 Automatic fallback to Gemini 3.5-flash-lite
+- ⚡ Gemini 3.6 Flash as primary model
+- 🔄 Automatic fallback to Gemini 3.5 Flash Lite when rate limit is hit
 - 🏗️ Modular project structure
 - 🔐 Secure API keys using environment variables
 - 🖥️ Simple and lightweight CLI (for now ..)
@@ -46,7 +46,7 @@ jarvis/
 ├── chats/             # Chat history (future)
 ├── config.py          # Configuration
 ├── main.py            # Main application
-├── providers.py       # Groq & Gemini providers
+├── providers.py       # Gemini providers (primary + fallback)
 ├── requirements.txt
 └── README.md
 ```
@@ -95,14 +95,12 @@ pip install -r requirements.txt
 Fish Shell
 
 ```fish
-set -Ux GROQ_API "your_groq_api_key"
 set -Ux GEMINI_API "your_gemini_api_key"
 ```
 
 Verify
 
 ```fish
-echo $GROQ_API
 echo $GEMINI_API
 ```
 
@@ -125,8 +123,7 @@ Exit anytime with
 ## 🧩 Tech Stack
 
 - 🐍 Python
-- ⚡ Groq API
-- 💎 Google Gemini API
+- 💎 Google Gemini API (`gemini-3.6-flash` + `gemini-3.5-flash-lite`)
 - 🔧 Virtual Environment
 
 ---
@@ -134,7 +131,7 @@ Exit anytime with
 ## 🗺️ Roadmap
 
 ### ✅ Version 0.1
-- [x] Connect to Groq API
+- [x] Connect to Gemini API
 - [x] Single prompt chatbot
 
 ### ✅ Version 0.2
@@ -143,8 +140,9 @@ Exit anytime with
 - [x] Modular codebase
 
 ### ✅ Version 0.3
-- [x] Gemini fallback
+- [x] Dual Gemini model setup
 - [x] Streaming responses
+- [x] Automatic fallback (3.6 Flash → 3.5 Flash Lite on rate limit)
 
 ### 🚧 Version 0.4
 - [x] Context Manager
