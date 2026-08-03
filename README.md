@@ -148,8 +148,8 @@ Exit anytime with
 
 ### 🚧 Version 0.4
 - [x] Context Manager
-- [ ] Sliding context window
-- [ ] Persistent chat history
+- [x] Sliding context window
+- [x] Persistent chat history
 
 ### 🚀 Version 1.0
 - [ ] Memory Manager

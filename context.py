@@ -7,6 +7,6 @@ def build_context(messages):
         }
     ]
 
-    context.extend(messages[-20])
+    context.extend(messages[-20:])
 
     return context

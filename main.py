@@ -1,7 +1,9 @@
 from llm import chat
 from context import build_context
+from storage import load_chat , save_chat
 
-messages = []
+
+conversation = load_chat()
 
 print("🤖 Jarvis is online.")
 print("Type /exit to quit.\n")
@@ -17,24 +19,28 @@ while True:
     if not prompt:
         continue
 
-    messages.append({
+    conversation.append({
         "role": "user",
         "content": prompt
     })
 
+    
+
     try:
         print("Jarvis: ", end="", flush=True)
 
-        chat_context = build_context(messages)
+        chat_context = build_context(conversation)
 
         reply = chat(chat_context)
 
-        messages.append({
+        conversation.append({
             "role": "assistant",
             "content": reply
         })
 
+        save_chat(conversation)
+
     except Exception as e:
         print(f"\nError: {e}")
 
-        messages.pop()
+        conversation.pop()
