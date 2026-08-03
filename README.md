@@ -147,7 +147,7 @@ Exit anytime with
 - [x] Streaming responses
 
 ### 🚧 Version 0.4
-- [ ] Context Manager
+- [x] Context Manager
 - [ ] Sliding context window
 - [ ] Persistent chat history
 

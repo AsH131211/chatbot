@@ -60,11 +60,3 @@ def ask_gemini(messages):
     print()
 
     return reply
-
-
-def ask_llm(messages):
-    try:
-        return ask_groq(messages)
-
-    except RateLimitError:
-        return ask_gemini(messages)

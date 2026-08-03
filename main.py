@@ -1,13 +1,9 @@
-from providers import ask_llm
+from llm import chat
+from context import build_context
 
-messages = [
-    {
-        "role": "system",
-        "content": "You are Jarvis, a helpful AI assistant."
-    }
-]
+messages = []
 
-print("Jarvis is online.")
+print("🤖 Jarvis is online.")
 print("Type /exit to quit.\n")
 
 while True:
@@ -29,7 +25,9 @@ while True:
     try:
         print("Jarvis: ", end="", flush=True)
 
-        reply = ask_llm(messages)
+        chat_context = build_context(messages)
+
+        reply = chat(chat_context)
 
         messages.append({
             "role": "assistant",
@@ -37,6 +35,6 @@ while True:
         })
 
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"\nError: {e}")
 
         messages.pop()
