@@ -27,9 +27,9 @@ while True:
     })
 
     try:
-        reply = ask_llm(messages)
+        print("Jarvis: ", end="", flush=True)
 
-        print(f"\nJarvis: {reply}\n")
+        reply = ask_llm(messages)
 
         messages.append({
             "role": "assistant",

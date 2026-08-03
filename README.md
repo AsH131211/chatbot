@@ -144,7 +144,7 @@ Exit anytime with
 
 ### ✅ Version 0.3
 - [x] Gemini fallback
-- [ ] Streaming responses
+- [x] Streaming responses
 
 ### 🚧 Version 0.4
 - [ ] Context Manager
