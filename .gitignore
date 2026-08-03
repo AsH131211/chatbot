@@ -1,5 +1,18 @@
-.venv/
+# Python
 __pycache__/
-*.pyc
-.env
-chats/
+*.py[cod]
+*.pyo
+
+# Virtual environment
+.venv/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Chat history
+chats/*.json

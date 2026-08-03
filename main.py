@@ -1,7 +1,4 @@
-from groq import Groq
-from config import *
-
-client = Groq(api_key=API_KEY)
+from providers import ask_llm
 
 messages = [
     {
@@ -17,36 +14,29 @@ while True:
 
     prompt = input("> ").strip()
 
-    
     if prompt.casefold() == "/exit":
         print("Shutting down...")
         break
 
-   
     if not prompt:
         continue
 
-   
     messages.append({
         "role": "user",
         "content": prompt
     })
 
-    
-    response = client.chat.completions.create(
-        model=MODEL,
-        messages=messages,
-        temperature=TEMPERATURE,
-        max_completion_tokens=MAX_TOKENS,
-    )
+    try:
+        reply = ask_llm(messages)
 
-    
-    reply = response.choices[0].message.content
+        print(f"\nJarvis: {reply}\n")
 
-    print(f"\nJarvis: {reply}\n")
+        messages.append({
+            "role": "assistant",
+            "content": reply
+        })
 
-   
-    messages.append({
-        "role": "assistant",
-        "content": reply
-    })
+    except Exception as e:
+        print(f"Error: {e}")
+
+        messages.pop()
