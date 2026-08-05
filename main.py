@@ -30,7 +30,6 @@ while True:
 
         chat_context = build_context(memory, conversation)
         reply = chat(chat_context)
-        print(reply)
 
         conversation.append({
             "role": "assistant",

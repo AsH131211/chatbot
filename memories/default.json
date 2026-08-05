@@ -1,8 +1,5 @@
 {
     "facts": [
-        "User's laptop is an ASUS TUF A15 (2023 edition) with an AMD Ryzen 7 7435HS processor, NVIDIA RTX 3050 (4GB VRAM) GPU, and 16GB DDR5 RAM.",
-        "User's operating system is CachyOS.",
-        "User's preferred shell is Fish shell.",
-        "User is interested in using Qwen (specifically Qwen 2.5 / 8B / 7B models with a size under 7 GB) as a local LLM."
+        "The user's location is Thiruvananthapuram, Kerala, India."
     ]
 }
