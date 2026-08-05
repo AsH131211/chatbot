@@ -10,18 +10,33 @@ client = OpenAI(
 
 def ask_local(messages):
     try:
-        response = client.chat.completions.create(
+        stream = client.chat.completions.create(
             model=LLAMA_MODEL,
             messages=messages,
             temperature=LLAMA_TEMPERATURE,
+            stream=True,
         )
 
-        return response.choices[0].message.content
+        full_response = ""
+
+        for chunk in stream:
+            if not chunk.choices:
+                continue
+
+            delta = chunk.choices[0].delta.content
+
+            if delta:
+                print(delta, end="", flush=True)
+                full_response += delta
+
+        print()
+
+        return full_response
 
     except APIConnectionError:
         raise RuntimeError(
             "Could not connect to the local LLM. "
-            "Is llama-server running on http://localhost:8080 ?"
+            "Is llama-server running on http://localhost:8080?"
         )
 
     except APITimeoutError:
