@@ -1,22 +1,22 @@
-# 🤖 Jarvis
+# 🤖 J.A.R.V.I.S.
 
-> **A lightweight terminal AI assistant built from scratch in Python — inspired by Iron Man's J.A.R.V.I.S.**
+> **A lightweight terminal AI assistant built from scratch in Python — Just A Rather Very Intelligent System.**
 
-Jarvis is a personal learning project that explores how modern AI assistants like ChatGPT, Gemini, and Claude work under the hood. Every component is hand-crafted — from conversation management and persistent memory to provider routing and local LLM support.
+Jarvis is a personal learning project that explores how modern AI assistants work under the hood. Every component is hand-crafted — from conversation management and persistent memory to provider routing, live web search, and local LLM support.
 
 ---
 
 ## ✨ Features
 
 - 💬 **Interactive terminal chatbot** — clean REPL-style interface
-- 🧠 **Persistent memory** — extracts and stores long-term facts about the user across sessions
+- 🧠 **Persistent memory** — extracts and stores long-term facts about the user across sessions using Gemini
 - 💾 **Persistent chat history** — conversation is saved and resumed automatically
 - 🪟 **Sliding context window** — keeps the last 20 messages in context to stay within token limits
-- 🔀 **Smart provider routing** — use `/rt` prefix to force the realtime (Gemini) provider
-- 🖥️ **Local LLM support** — runs Qwen3-8B via `llama-server` (OpenAI-compatible API)
-- ☁️ **Realtime provider** — Gemini streaming via Google GenAI SDK
-- 🔄 **Automatic fallback** — falls back to Gemini if the local model is unavailable
-- 🏗️ **Modular architecture** — clean separation of concerns across focused modules
+- 🔀 **Smart provider routing** — use `/rt` prefix to trigger live web search + local LLM answer
+- 🌐 **Live web search** — queries SearXNG, fetches and scrapes full page content via `trafilatura` and `BeautifulSoup`
+- 🖥️ **Local LLM** — streams responses from Qwen3-8B via `llama-server` (OpenAI-compatible API)
+- ⚡ **Live token streaming** — tokens print to the terminal as they're generated; spinner clears on first token
+- 🎭 **JARVIS personality** — responds as the composed, witty AI from Iron Man; addresses you as *"sir"*
 - 🔐 **Secure API key handling** — keys loaded from environment variables only
 
 ---
@@ -24,19 +24,16 @@ Jarvis is a personal learning project that explores how modern AI assistants lik
 ## 🚀 Demo
 
 ```text
-Jarvis is online.
+ Jarvis is online.
 Type /exit to quit.
 
-> hello
+> hello, who are you?
+Jarvis: Good evening, sir. I am J.A.R.V.I.S. — your personal AI assistant. How may I be of service?
 
-Jarvis: Hello! How can I assist you today?
-
-> /rt what's the latest news in AI?
-
-Jarvis: [streams response from Gemini in realtime...]
+> /rt what's the latest stable Linux kernel version?
+Jarvis: Based on live data, sir, the latest stable Linux kernel is version 6.x.x, released [date]. Shall I pull up the full changelog?
 
 > /exit
-
 Shutting down...
 ```
 
@@ -49,15 +46,18 @@ jarvis/
 │
 ├── main.py              # Entry point — REPL loop, orchestrates all modules
 ├── config.py            # Centralized config (models, API keys, URLs, flags)
-├── router.py            # Provider routing logic (/rt prefix → realtime)
-├── llm.py               # Core chat function — selects provider and dispatches
-├── context.py           # Builds the full message context (system + memory + history)
+├── router.py            # Provider routing logic (/rt prefix → realtime search)
+├── llm.py               # Core chat function — routes, fetches web context, dispatches
+├── context.py           # Builds the full message context (system prompt + memory + history)
 ├── memory.py            # Persistent memory: load, save, and LLM-powered extraction
 ├── storage.py           # Chat history: load and save conversation to disk
 │
 ├── providers/
-│   ├── local.py         # Local LLM provider (llama-server, OpenAI-compatible)
-│   └── realtime.py      # Realtime provider (Gemini streaming)
+│   ├── local.py         # Local LLM provider (llama-server, streaming, OpenAI-compatible)
+│   └── realtime.py      # Realtime provider — SearXNG search + page fetching
+│
+├── utils/
+│   └── fetch.py         # Web page fetcher: trafilatura + BeautifulSoup fallback
 │
 ├── chats/
 │   └── default.json     # Persisted conversation history (auto-created)
@@ -100,16 +100,11 @@ source .venv/bin/activate.fish
 pip install -r requirements.txt
 ```
 
-> **Note:** Local LLM support also requires the `openai` Python package. Install it with:
-> ```bash
-> pip install openai
-> ```
-
 ---
 
 ## 🔑 Environment Variables
 
-Jarvis requires a Google Gemini API key to be set as an environment variable.
+Jarvis requires a Google Gemini API key for memory extraction.
 
 ```bash
 # Bash / Zsh — add to ~/.bashrc or ~/.zshrc
@@ -145,33 +140,29 @@ Exit anytime with:
 
 ## 🔀 Provider Routing
 
-Jarvis uses a smart routing system to decide which LLM handles your message.
+Jarvis uses a simple prefix-based routing system.
 
-| Prefix | Provider | Model |
-|--------|----------|-------|
-| *(none)* | Local LLM (default) | Qwen3-8B via `llama-server` |
-| `/rt ` | Realtime (Gemini) | `gemini-3.6-flash` |
+| Prefix | Behaviour |
+|--------|-----------|
+| *(none)* | Sent directly to the local Qwen3-8B model |
+| `/rt ` | Searches the web via SearXNG, scrapes top results, and sends the live content as context to the local model |
 
 **Example:**
 
 ```text
-> tell me a joke           ← handled by local Qwen3 model
-> /rt what is quantum computing?  ← handled by Gemini streaming
+> tell me a joke                        ← local Qwen3 model only
+> /rt latest stable Linux kernel?      ← live web search → local model answers with fresh data
 ```
-
-If the local model is unreachable (e.g., `llama-server` is not running), Jarvis automatically falls back to the Gemini provider.
 
 ---
 
 ## 🖥️ Local LLM Setup
 
-Jarvis connects to a locally running `llama-server` instance via its OpenAI-compatible API.
+Jarvis streams responses from a locally running `llama-server` instance.
 
-**1. Install `llama.cpp`** and download the model:
+**1. Install `llama.cpp` and start the server:**
 
 ```bash
-# Example: download Qwen3-8B GGUF
-# Then run the server
 llama-server --model Qwen3-8B-Q4_K_M.gguf --port 8080
 ```
 
@@ -181,8 +172,6 @@ llama-server --model Qwen3-8B-Q4_K_M.gguf --port 8080
 curl http://localhost:8080/v1/models
 ```
 
-Jarvis will then automatically route non-prefixed queries to it.
-
 Configured in [`config.py`](config.py):
 
 ```python
@@ -190,15 +179,40 @@ LLAMA_URL   = "http://localhost:8080/v1"
 LLAMA_MODEL = "Qwen/Qwen3-8B-GGUF:Q4_K_M"
 ```
 
+Tokens stream live to the terminal — the spinner clears the moment the first token arrives.
+
+---
+
+## 🌐 Web Search Setup (SearXNG)
+
+The `/rt` prefix triggers a live web search using a locally running [SearXNG](https://github.com/searxng/searxng) instance.
+
+**Run SearXNG with Docker:**
+
+```bash
+docker run -d -p 8888:8080 searxng/searxng
+```
+
+Configured in [`config.py`](config.py):
+
+```python
+SEARXNG_URL = "http://127.0.0.1:8888"
+```
+
+**How it works:**
+1. Queries SearXNG for the top 3 results
+2. Fetches each URL — extracts clean text via `trafilatura`, with `BeautifulSoup` as fallback
+3. Injects the scraped content as a system message so the local model answers from live data
+
 ---
 
 ## 🧠 Memory System
 
-After each turn, Jarvis uses a lightweight Gemini model (`gemini-3.5-flash-lite`) to extract and update long-term facts about the user from the conversation.
+After each turn, Jarvis uses a lightweight Gemini model (`gemini-3.5-flash-lite`) to extract and update long-term facts about the user.
 
 **Rules applied during extraction:**
 - ✅ Keep only persistent, useful facts
-- ❌ Ignore greetings, small talk, temporary plans
+- ❌ Ignore greetings, small talk, temporary plans, assistant responses
 - 🔀 Merge duplicate or related facts
 - 💾 Stored in `memories/default.json`
 
@@ -211,10 +225,12 @@ Memory is injected as a system message at the start of every context, so Jarvis 
 | Component | Technology |
 |-----------|------------|
 | Language | Python 3.11+ |
-| Realtime LLM | Google Gemini (`gemini-3.6-flash`) |
+| Local LLM | Qwen3-8B via `llama-server` (OpenAI-compatible, streamed) |
 | Memory Extraction | Google Gemini (`gemini-3.5-flash-lite`) |
-| Local LLM | Qwen3-8B via `llama-server` (OpenAI-compatible) |
+| Web Search | SearXNG (self-hosted, local) |
+| Web Scraping | `trafilatura` + `BeautifulSoup4` / `lxml` |
 | Google GenAI SDK | `google-genai >= 1.32.0` |
+| HTTP | `requests` |
 
 ---
 
@@ -241,7 +257,9 @@ Memory is injected as a system message at the start of every context, so Jarvis 
 - [x] Persistent memory system (LLM-powered extraction)
 - [x] Local LLM provider (`llama-server` + Qwen3-8B)
 - [x] Smart provider routing (`/rt` prefix)
-- [x] Automatic local → realtime fallback
+- [x] Live web search (SearXNG + page scraping)
+- [x] Live token streaming (spinner clears on first token)
+- [x] JARVIS personality system prompt
 
 ### 🚀 Version 1.0 (Planned)
 - [ ] Rich terminal UI (TUI)
@@ -263,6 +281,7 @@ Topics being explored:
 - Provider Abstraction & Routing
 - Streaming LLM Responses
 - Local LLM Integration (llama.cpp)
+- Live Web Search & Content Extraction
 - Tool Calling
 - Retrieval-Augmented Generation (RAG)
 
