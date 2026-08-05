@@ -11,7 +11,7 @@ def build_context(memory, messages):
     if facts:
         memory_text = "Known facts about the user:\n\n"
         for fact in facts:
-            memory_text +="\n".join(f"-{fact}") 
+            memory_text += f"- {fact}\n" 
 
         context.append({
             "role":"system",

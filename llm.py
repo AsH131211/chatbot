@@ -1,11 +1,34 @@
-from providers import ask_gemini, ask_gemini_fallback
-from google.api_core.exceptions import ResourceExhausted
+from router import choose_provider, Provider
+from providers.local import ask_local
+from providers.realtime import ask_realtime
 
 
 def chat(messages):
-    try:
-        return ask_gemini(messages)
+    last_user = next(
+        msg for msg in reversed(messages)
+        if msg["role"] == "user"
+    )
 
-    except ResourceExhausted:
-        print("\n[Rate limit reached on 3.6 flash — switching to fallback 3.5 flash lite...]")
-        return ask_gemini_fallback(messages)
+    provider, cleaned_prompt = choose_provider(last_user["content"])
+
+    messages = messages.copy()
+
+    for i in range(len(messages) - 1, -1, -1):
+        if messages[i]["role"] == "user":
+            messages[i] = {
+                **messages[i],
+                "content": cleaned_prompt,
+            }
+            break
+
+    if provider == Provider.REALTIME:
+        return ask_realtime(messages)
+
+    try:
+        return ask_local(messages)
+
+    except RuntimeError as e:
+        print(f"\n⚠️ {e}")
+        print("⚠️ Falling back to realtime provider...\n")
+
+        return ask_realtime(messages)

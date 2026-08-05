@@ -1,7 +1,5 @@
 from google import genai
-from google.api_core.exceptions import ResourceExhausted
-from config import *
-
+from config import (GEMINI_API, RT_MODEL,)
 gemini_client = genai.Client(api_key=GEMINI_API)
 
 
@@ -26,11 +24,14 @@ def _stream_gemini(model, messages):
     return reply
 
 
-def ask_gemini(messages):
+def ask_realtime(messages):
+    try:
+            return _stream_gemini(RTMODEL, messages)
+
+    except Exception as e:
+        raise RuntimeError(
+            f"Realtime provider error: {e}"
+        )
     
-    return _stream_gemini(MODEL2, messages)
 
 
-def ask_gemini_fallback(messages):
-    
-    return _stream_gemini(MODEL1, messages)

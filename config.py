@@ -1,11 +1,14 @@
 import os
 GEMINI_API = os.environ["GEMINI_API"]
 
-MODEL1 = "gemini-3.5-flash-lite"   
-MODEL2 = "gemini-3.6-flash" 
+RT_MODEL = "gemini-3.6-flash" 
 MEM_MODEL = "gemini-3.5-flash-lite"
-
-
-TEMPERATURE = 0.7
-
+TEMPERATURE = 0.5
 MAX_TOKENS = 1024
+
+
+LLAMA_URL = "http://localhost:8080/v1"
+LLAMA_MODEL = "Qwen/Qwen3-8B-GGUF:Q4_K_M"
+LLAMA_TEMPERATURE = 0.6
+
+ALLOW_LOCAL_FALLBACK = True
