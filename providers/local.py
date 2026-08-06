@@ -1,7 +1,4 @@
-import sys
-import threading
-import itertools
-import time
+from typing import Generator
 
 from openai import OpenAI, APIConnectionError, APITimeoutError
 from config import LLAMA_URL, LLAMA_MODEL, LLAMA_TEMPERATURE
@@ -12,22 +9,15 @@ client = OpenAI(
 )
 
 
-def _spinner(stop_event):
-    frames = itertools.cycle(["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
-    while not stop_event.is_set():
-        sys.stderr.write(f"\r\033[2m{next(frames)} thinking...\033[0m")
-        sys.stderr.flush()
-        time.sleep(0.08)
-    sys.stderr.write("\r\033[K")
-    sys.stderr.flush()
+def ask_local(messages) -> str:
+    """Non-streaming call — returns the full response string."""
+    chunks = list(stream_local(messages))
+    return "".join(chunks)
 
 
-def ask_local(messages):
+def stream_local(messages) -> Generator[str, None, None]:
+    """Streaming call — yields tokens one by one."""
     try:
-        stop = threading.Event()
-        spinner_thread = threading.Thread(target=_spinner, args=(stop,), daemon=True)
-        spinner_thread.start()
-
         stream = client.chat.completions.create(
             model=LLAMA_MODEL,
             messages=messages,
@@ -35,30 +25,12 @@ def ask_local(messages):
             stream=True,
         )
 
-        full_response = ""
-        first_token = True
         for chunk in stream:
             if not chunk.choices:
                 continue
             delta = chunk.choices[0].delta.content
             if delta:
-                if first_token:
-                    # Kill spinner as soon as first token arrives
-                    stop.set()
-                    spinner_thread.join()
-                    first_token = False
-                sys.stdout.write(delta)
-                sys.stdout.flush()
-                full_response += delta
-
-        # Ensure spinner is stopped even if no tokens came
-        if not stop.is_set():
-            stop.set()
-            spinner_thread.join()
-
-        sys.stdout.write("\n")
-        sys.stdout.flush()
-        return full_response
+                yield delta
 
     except APIConnectionError:
         raise RuntimeError(

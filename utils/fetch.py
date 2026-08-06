@@ -95,7 +95,7 @@ def fetch_url(url: str) -> str:
         )
 
         if not _is_poor_extraction(traf_text or ""):
-            return traf_text  # type: ignore[return-value]
+            return traf_text 
 
         bs_text = _bs4_extract(html)
 

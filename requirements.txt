@@ -14,3 +14,7 @@ trafilatura
 # HTML parsing (fallback scraper)
 beautifulsoup4
 lxml
+
+# TUI — rich terminal rendering + shell input
+rich>=13.0.0
+prompt_toolkit>=3.0.0
