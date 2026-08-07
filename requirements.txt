@@ -15,6 +15,6 @@ trafilatura
 beautifulsoup4
 lxml
 
-# TUI — rich terminal rendering + shell input
+# TUI — full-screen terminal UI (chat viewport, streaming, key bindings)
 rich>=13.0.0
 prompt_toolkit>=3.0.0

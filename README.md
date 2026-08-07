@@ -2,39 +2,48 @@
 
 > **A lightweight terminal AI assistant built from scratch in Python — Just A Rather Very Intelligent System.**
 
-Jarvis is a personal learning project that explores how modern AI assistants work under the hood. Every component is hand-crafted — from conversation management and persistent memory to provider routing, live web search, and local LLM support.
+Jarvis is a personal learning project that explores how modern AI assistants work under the hood. Every component is hand-crafted — from conversation management and persistent memory to provider routing, live web search, local LLM support, and a full-screen terminal UI.
 
 ---
 
 ## ✨ Features
 
-- 💬 **Interactive terminal chatbot** — clean REPL-style interface
+- 🖥️ **Full-screen TUI** — immersive, full-screen terminal shell built with `rich` + `prompt_toolkit`
+- 💬 **Streaming chat** — tokens stream live into the TUI viewport as they're generated
 - 🧠 **Persistent memory** — extracts and stores long-term facts about the user across sessions using Gemini
 - 💾 **Persistent chat history** — conversation is saved and resumed automatically
 - 🪟 **Sliding context window** — keeps the last 20 messages in context to stay within token limits
 - 🔀 **Smart provider routing** — use `/rt` prefix to trigger live web search + local LLM answer
 - 🌐 **Live web search** — queries SearXNG, fetches and scrapes full page content via `trafilatura` and `BeautifulSoup`
+- 📍 **Location-aware search** — memory-injected location context improves local search results
 - 🖥️ **Local LLM** — streams responses from Qwen3-8B via `llama-server` (OpenAI-compatible API)
-- ⚡ **Live token streaming** — tokens print to the terminal as they're generated; spinner clears on first token
 - 🎭 **JARVIS personality** — responds as the composed, witty AI from Iron Man; addresses you as *"sir"*
 - 🔐 **Secure API key handling** — keys loaded from environment variables only
+- 🚀 **One-command launch** — `jarvis.sh` auto-creates the venv, installs deps, and starts the TUI
 
 ---
 
 ## 🚀 Demo
 
 ```text
- Jarvis is online.
-Type /exit to quit.
-
-> hello, who are you?
-Jarvis: Good evening, sir. I am J.A.R.V.I.S. — your personal AI assistant. How may I be of service?
-
-> /rt what's the latest stable Linux kernel version?
-Jarvis: Based on live data, sir, the latest stable Linux kernel is version 6.x.x, released [date]. Shall I pull up the full changelog?
-
-> /exit
-Shutting down...
+┌──────────────────────────────────────────┐
+│  jarvis ●                          19:49 │  ← header
+├──────────────────────────────────────────┤
+│                                          │
+│   jarvis                                 │
+│   Good evening, sir. All systems are     │
+│   online and ready. How may I assist?    │
+│                                 you      │
+│           ╭─────────────────────────╮   │
+│           │ /rt latest Linux kernel │   │
+│           ╰─────────────────────────╯   │
+│   jarvis                                 │
+│   The latest stable Linux kernel is...  │
+│                                          │
+├──────────────────────────────────────────┤
+│  ›  type here ...                        │
+│  ctrl-d quit  ·  ctrl-c cancel           │
+└──────────────────────────────────────────┘
 ```
 
 ---
@@ -44,13 +53,18 @@ Shutting down...
 ```text
 jarvis/
 │
-├── main.py              # Entry point — REPL loop, orchestrates all modules
+├── main.py              # Minimal entry point — creates Assistant and runs a basic REPL
+├── jarvis.sh            # One-command launcher — auto-venv, deps, starts TUI
 ├── config.py            # Centralized config (models, API keys, URLs, flags)
+├── assistant.py         # Assistant class — wraps streaming, memory, and history
 ├── router.py            # Provider routing logic (/rt prefix → realtime search)
 ├── llm.py               # Core chat function — routes, fetches web context, dispatches
 ├── context.py           # Builds the full message context (system prompt + memory + history)
 ├── memory.py            # Persistent memory: load, save, and LLM-powered extraction
 ├── storage.py           # Chat history: load and save conversation to disk
+│
+├── UI/
+│   └── tui.py           # Full-screen TUI — rich layout, streaming viewport, key bindings
 │
 ├── providers/
 │   ├── local.py         # Local LLM provider (llama-server, streaming, OpenAI-compatible)
@@ -126,15 +140,38 @@ Get a free API key at [aistudio.google.com](https://aistudio.google.com).
 
 ## ▶️ Running Jarvis
 
+**Recommended — one-command launcher (auto-manages venv & deps):**
+
+```bash
+./jarvis.sh
+```
+
+**Or manually (with venv activated):**
+
+```bash
+python UI/tui.py
+```
+
+**Minimal REPL (no TUI):**
+
 ```bash
 python main.py
 ```
 
-Exit anytime with:
+---
 
-```text
-/exit
-```
+## ⌨️ TUI Commands
+
+| Command | Behaviour |
+|---------|----------|
+| `/rt <query>` | Live web search → local model answers with fresh data |
+| `/clear` | Clear the screen without resetting the session |
+| `/new` | Fresh session (clears screen + conversation history) |
+| `/help` | Show available commands |
+| `/exit` or `/quit` | Quit Jarvis |
+| `Ctrl-D` | Quit Jarvis |
+| `Ctrl-C` | Cancel the current streaming response |
+| `↑` / `↓` | Navigate input history |
 
 ---
 
@@ -179,7 +216,7 @@ LLAMA_URL   = "http://localhost:8080/v1"
 LLAMA_MODEL = "Qwen/Qwen3-8B-GGUF:Q4_K_M"
 ```
 
-Tokens stream live to the terminal — the spinner clears the moment the first token arrives.
+Tokens stream live into the TUI viewport — no spinner, just real-time text.
 
 ---
 
@@ -202,7 +239,8 @@ SEARXNG_URL = "http://127.0.0.1:8888"
 **How it works:**
 1. Queries SearXNG for the top 3 results
 2. Fetches each URL — extracts clean text via `trafilatura`, with `BeautifulSoup` as fallback
-3. Injects the scraped content as a system message so the local model answers from live data
+3. Enhances the query with the user's known location (from memory) for better local results
+4. Injects the scraped content as a system message so the local model answers from live data
 
 ---
 
@@ -216,7 +254,7 @@ After each turn, Jarvis uses a lightweight Gemini model (`gemini-3.5-flash-lite`
 - 🔀 Merge duplicate or related facts
 - 💾 Stored in `memories/default.json`
 
-Memory is injected as a system message at the start of every context, so Jarvis always knows who it's talking to.
+Memory is injected as a system message at the start of every context, so Jarvis always knows who it's talking to. Location facts from memory are also used to improve web search relevance.
 
 ---
 
@@ -225,6 +263,7 @@ Memory is injected as a system message at the start of every context, so Jarvis 
 | Component | Technology |
 |-----------|------------|
 | Language | Python 3.11+ |
+| TUI Framework | `prompt_toolkit >= 3.0.0` + `rich >= 13.0.0` |
 | Local LLM | Qwen3-8B via `llama-server` (OpenAI-compatible, streamed) |
 | Memory Extraction | Google Gemini (`gemini-3.5-flash-lite`) |
 | Web Search | SearXNG (self-hosted, local) |
@@ -258,11 +297,19 @@ Memory is injected as a system message at the start of every context, so Jarvis 
 - [x] Local LLM provider (`llama-server` + Qwen3-8B)
 - [x] Smart provider routing (`/rt` prefix)
 - [x] Live web search (SearXNG + page scraping)
-- [x] Live token streaming (spinner clears on first token)
+- [x] Live token streaming
 - [x] JARVIS personality system prompt
 
-### 🚀 Version 1.0 (Planned)
-- [ ] Rich terminal UI (TUI)
+### ✅ Version 1.0
+- [x] Full-screen TUI (`rich` + `prompt_toolkit`)
+- [x] `Assistant` class — clean streaming + memory API
+- [x] TUI commands: `/clear`, `/new`, `/help`, `/exit`, `/quit`
+- [x] Ctrl-C to cancel streaming response mid-generation
+- [x] Input history navigation (↑ / ↓)
+- [x] Location-aware web search (memory-injected context)
+- [x] One-command launcher (`jarvis.sh`)
+
+### 🚀 Version 1.1+ (Planned)
 - [ ] Named chat sessions
 - [ ] Tool calling / function use
 - [ ] Retrieval-Augmented Generation (RAG)
@@ -282,6 +329,7 @@ Topics being explored:
 - Streaming LLM Responses
 - Local LLM Integration (llama.cpp)
 - Live Web Search & Content Extraction
+- Terminal UI Design (TUI)
 - Tool Calling
 - Retrieval-Augmented Generation (RAG)
 
