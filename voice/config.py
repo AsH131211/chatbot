@@ -1,0 +1,6 @@
+VOICE_NAME = "bm_daniel"
+MODEL_QUALITY = "q4"
+LANGUAGE = "en-gb"
+SPEECH_SPEED = 1.0
+
+VOICE_ENABLED = True

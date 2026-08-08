@@ -2,7 +2,7 @@
 
 > **A lightweight terminal AI assistant built from scratch in Python — Just A Rather Very Intelligent System.**
 
-Jarvis is a personal learning project that explores how modern AI assistants work under the hood. Every component is hand-crafted — from conversation management and persistent memory to provider routing, live web search, local LLM support, and a full-screen terminal UI.
+Jarvis is a personal learning project that explores how modern AI assistants work under the hood. Every component is hand-crafted — from conversation management and persistent memory to provider routing, live web search, local LLM support, voice synthesis, and a full-screen terminal UI.
 
 ---
 
@@ -10,6 +10,7 @@ Jarvis is a personal learning project that explores how modern AI assistants wor
 
 - 🖥️ **Full-screen TUI** — immersive, full-screen terminal shell built with `rich` + `prompt_toolkit`
 - 💬 **Streaming chat** — tokens stream live into the TUI viewport as they're generated
+- 🔊 **Voice synthesis** — sentence-by-sentence TTS via `pykokoro` (Kokoro), synced with the streaming response
 - 🧠 **Persistent memory** — extracts and stores long-term facts about the user across sessions using Gemini
 - 💾 **Persistent chat history** — conversation is saved and resumed automatically
 - 🪟 **Sliding context window** — keeps the last 20 messages in context to stay within token limits
@@ -27,7 +28,7 @@ Jarvis is a personal learning project that explores how modern AI assistants wor
 
 ```text
 ┌──────────────────────────────────────────┐
-│  jarvis ●                          19:49 │  ← header
+│  jarvis ●                          19:49 │
 ├──────────────────────────────────────────┤
 │                                          │
 │   jarvis                                 │
@@ -53,18 +54,24 @@ Jarvis is a personal learning project that explores how modern AI assistants wor
 ```text
 jarvis/
 │
-├── main.py              # Minimal entry point — creates Assistant and runs a basic REPL
+├── main.py              # Minimal streaming REPL (no TUI)
 ├── jarvis.sh            # One-command launcher — auto-venv, deps, starts TUI
 ├── config.py            # Centralized config (models, API keys, URLs, flags)
-├── assistant.py         # Assistant class — wraps streaming, memory, and history
-├── router.py            # Provider routing logic (/rt prefix → realtime search)
+├── assistant.py         # Assistant class — streaming, memory, voice sync
+├── router.py            # Provider routing (/rt prefix → realtime search)
 ├── llm.py               # Core chat function — routes, fetches web context, dispatches
 ├── context.py           # Builds the full message context (system prompt + memory + history)
 ├── memory.py            # Persistent memory: load, save, and LLM-powered extraction
-├── storage.py           # Chat history: load and save conversation to disk
+├── storage.py           # Chat history: atomic load/save to disk
 │
 ├── UI/
 │   └── tui.py           # Full-screen TUI — rich layout, streaming viewport, key bindings
+│
+├── voice/
+│   ├── __init__.py      # Public API: preload, speak, wait
+│   ├── tts.py           # TTS engine — pykokoro pipeline, background worker queue
+│   ├── player.py        # Audio playback via pw-play
+│   └── config.py        # Voice settings (voice name, speed, language, quality)
 │
 ├── providers/
 │   ├── local.py         # Local LLM provider (llama-server, streaming, OpenAI-compatible)
@@ -98,14 +105,7 @@ cd jarvis
 
 ```bash
 python -m venv .venv
-```
-
-```bash
-# Bash / Zsh
 source .venv/bin/activate
-
-# Fish
-source .venv/bin/activate.fish
 ```
 
 **Install dependencies**
@@ -121,17 +121,7 @@ pip install -r requirements.txt
 Jarvis requires a Google Gemini API key for memory extraction.
 
 ```bash
-# Bash / Zsh — add to ~/.bashrc or ~/.zshrc
 export GEMINI_API="your_gemini_api_key"
-
-# Fish — persists across sessions
-set -Ux GEMINI_API "your_gemini_api_key"
-```
-
-Verify it's set:
-
-```bash
-echo $GEMINI_API
 ```
 
 Get a free API key at [aistudio.google.com](https://aistudio.google.com).
@@ -140,19 +130,19 @@ Get a free API key at [aistudio.google.com](https://aistudio.google.com).
 
 ## ▶️ Running Jarvis
 
-**Recommended — one-command launcher (auto-manages venv & deps):**
+**Recommended — one-command launcher:**
 
 ```bash
 ./jarvis.sh
 ```
 
-**Or manually (with venv activated):**
+**Or manually:**
 
 ```bash
 python UI/tui.py
 ```
 
-**Minimal REPL (no TUI):**
+**Minimal streaming REPL (no TUI):**
 
 ```bash
 python main.py
@@ -177,36 +167,17 @@ python main.py
 
 ## 🔀 Provider Routing
 
-Jarvis uses a simple prefix-based routing system.
-
 | Prefix | Behaviour |
 |--------|-----------|
 | *(none)* | Sent directly to the local Qwen3-8B model |
 | `/rt ` | Searches the web via SearXNG, scrapes top results, and sends the live content as context to the local model |
 
-**Example:**
-
-```text
-> tell me a joke                        ← local Qwen3 model only
-> /rt latest stable Linux kernel?      ← live web search → local model answers with fresh data
-```
-
 ---
 
 ## 🖥️ Local LLM Setup
 
-Jarvis streams responses from a locally running `llama-server` instance.
-
-**1. Install `llama.cpp` and start the server:**
-
 ```bash
 llama-server --model Qwen3-8B-Q4_K_M.gguf --port 8080
-```
-
-**2. Verify it's running:**
-
-```bash
-curl http://localhost:8080/v1/models
 ```
 
 Configured in [`config.py`](config.py):
@@ -216,15 +187,9 @@ LLAMA_URL   = "http://localhost:8080/v1"
 LLAMA_MODEL = "Qwen/Qwen3-8B-GGUF:Q4_K_M"
 ```
 
-Tokens stream live into the TUI viewport — no spinner, just real-time text.
-
 ---
 
 ## 🌐 Web Search Setup (SearXNG)
-
-The `/rt` prefix triggers a live web search using a locally running [SearXNG](https://github.com/searxng/searxng) instance.
-
-**Run SearXNG with Docker:**
 
 ```bash
 docker run -d -p 8888:8080 searxng/searxng
@@ -236,25 +201,29 @@ Configured in [`config.py`](config.py):
 SEARXNG_URL = "http://127.0.0.1:8888"
 ```
 
-**How it works:**
-1. Queries SearXNG for the top 3 results
-2. Fetches each URL — extracts clean text via `trafilatura`, with `BeautifulSoup` as fallback
-3. Enhances the query with the user's known location (from memory) for better local results
-4. Injects the scraped content as a system message so the local model answers from live data
+---
+
+## 🔊 Voice Setup
+
+Voice is powered by [Kokoro](https://github.com/thewh1teagle/pykokoro) via `pykokoro`. Audio is played through PipeWire (`pw-play`).
+
+Configure in [`voice/config.py`](voice/config.py):
+
+```python
+VOICE_NAME   = "bm_daniel"
+MODEL_QUALITY = "q4"
+LANGUAGE     = "en-gb"
+SPEECH_SPEED = 1.0
+VOICE_ENABLED = True
+```
+
+Kokoro models download automatically on first run. Playback requires `pipewire-pulse` or an equivalent PipeWire setup.
 
 ---
 
 ## 🧠 Memory System
 
-After each turn, Jarvis uses a lightweight Gemini model (`gemini-3.5-flash-lite`) to extract and update long-term facts about the user.
-
-**Rules applied during extraction:**
-- ✅ Keep only persistent, useful facts
-- ❌ Ignore greetings, small talk, temporary plans, assistant responses
-- 🔀 Merge duplicate or related facts
-- 💾 Stored in `memories/default.json`
-
-Memory is injected as a system message at the start of every context, so Jarvis always knows who it's talking to. Location facts from memory are also used to improve web search relevance.
+After each turn, Jarvis uses `gemini-3.5-flash-lite` to extract and update long-term facts about the user. Memory is injected as a system message at the start of every context, so Jarvis always knows who it's talking to.
 
 ---
 
@@ -263,63 +232,35 @@ Memory is injected as a system message at the start of every context, so Jarvis 
 | Component | Technology |
 |-----------|------------|
 | Language | Python 3.11+ |
-| TUI Framework | `prompt_toolkit >= 3.0.0` + `rich >= 13.0.0` |
+| TUI | `prompt_toolkit >= 3.0.0` + `rich >= 13.0.0` |
 | Local LLM | Qwen3-8B via `llama-server` (OpenAI-compatible, streamed) |
 | Memory Extraction | Google Gemini (`gemini-3.5-flash-lite`) |
+| Voice TTS | `pykokoro` (Kokoro) + `soundfile` + `pw-play` |
 | Web Search | SearXNG (self-hosted, local) |
 | Web Scraping | `trafilatura` + `BeautifulSoup4` / `lxml` |
-| Google GenAI SDK | `google-genai >= 1.32.0` |
 | HTTP | `requests` |
 
 ---
 
 ## 🗺️ Roadmap
 
-### ✅ Version 0.1
-- [x] Connect to Gemini API
-- [x] Single-prompt chatbot
-
-### ✅ Version 0.2
-- [x] Interactive chatbot (REPL loop)
-- [x] Conversation history
-- [x] Modular codebase
-
-### ✅ Version 0.3
-- [x] Streaming responses
-- [x] Provider abstraction layer
-
-### ✅ Version 0.4
-- [x] Context manager with sliding window
-- [x] Persistent chat history (JSON)
-
-### ✅ Version 0.5
-- [x] Persistent memory system (LLM-powered extraction)
-- [x] Local LLM provider (`llama-server` + Qwen3-8B)
-- [x] Smart provider routing (`/rt` prefix)
-- [x] Live web search (SearXNG + page scraping)
-- [x] Live token streaming
-- [x] JARVIS personality system prompt
+### ✅ Version 0.1 — 0.5
+- [x] Gemini API, REPL, conversation history, streaming, provider abstraction, context window, memory, local LLM, web search, JARVIS personality
 
 ### ✅ Version 1.0
-- [x] Full-screen TUI (`rich` + `prompt_toolkit`)
-- [x] `Assistant` class — clean streaming + memory API
-- [x] TUI commands: `/clear`, `/new`, `/help`, `/exit`, `/quit`
-- [x] Ctrl-C to cancel streaming response mid-generation
-- [x] Input history navigation (↑ / ↓)
-- [x] Location-aware web search (memory-injected context)
-- [x] One-command launcher (`jarvis.sh`)
+- [x] Full-screen TUI, `Assistant` class, TUI commands, Ctrl-C cancel, input history, location-aware search, one-command launcher
 
-### 🚀 Version 1.1+ (Planned)
+### ✅ Version 1.1
+- [x] Voice interface — sentence-synced TTS via Kokoro, background worker queue, preload on startup
+
+### 🚀 Version 1.2+ (Planned)
 - [ ] Named chat sessions
 - [ ] Tool calling / function use
 - [ ] Retrieval-Augmented Generation (RAG)
-- [ ] Voice interface
 
 ---
 
 ## 🎯 Project Goals
-
-This project is being built to deeply understand how production AI assistants actually work.
 
 Topics being explored:
 
@@ -330,16 +271,13 @@ Topics being explored:
 - Local LLM Integration (llama.cpp)
 - Live Web Search & Content Extraction
 - Terminal UI Design (TUI)
-- Tool Calling
-- Retrieval-Augmented Generation (RAG)
+- Voice Synthesis & Audio Sync
 
 ---
 
 ## 🤝 Contributing
 
-Contributions, ideas, and suggestions are always welcome.
-
-Feel free to open an issue or submit a pull request.
+Contributions, ideas, and suggestions are always welcome. Feel free to open an issue or submit a pull request.
 
 ---
 

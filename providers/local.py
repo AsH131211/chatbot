@@ -9,13 +9,12 @@ from config import LLAMA_URL, LLAMA_MODEL, LLAMA_TEMPERATURE
 
 
 def stream_local(messages) -> Generator[str, None, None]:
-    """Streaming call — yields tokens one by one, with minimal latency."""
     url = LLAMA_URL.rstrip("/") + "/chat/completions"
     payload = {
-        "model":       LLAMA_MODEL,
-        "messages":    messages,
+        "model": LLAMA_MODEL,
+        "messages": messages,
         "temperature": LLAMA_TEMPERATURE,
-        "stream":      True,
+        "stream": True,
     }
 
     try:
@@ -24,16 +23,12 @@ def stream_local(messages) -> Generator[str, None, None]:
             json=payload,
             headers={"Accept": "text/event-stream"},
             stream=True,
-            timeout=(10, 120),   # (connect timeout, read timeout)
+            timeout=(10, 120),
         ) as resp:
             resp.raise_for_status()
 
-            for raw_line in resp.iter_lines(chunk_size=None):
-                # iter_lines() yields bytes; decode to str.
-                if isinstance(raw_line, bytes):
-                    line = raw_line.decode("utf-8", errors="replace")
-                else:
-                    line = raw_line
+            for raw in resp.iter_lines(chunk_size=None):
+                line = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else raw
 
                 if not line.startswith("data:"):
                     continue
@@ -56,16 +51,12 @@ def stream_local(messages) -> Generator[str, None, None]:
                     yield delta
 
     except requests.ConnectionError:
-        raise RuntimeError(
-            "Could not connect to the local LLM. "
-            "Is llama-server running on http://localhost:8080?"
-        )
+        raise RuntimeError("Could not connect to llama-server on http://localhost:8080.")
     except requests.Timeout:
-        raise RuntimeError("The local model took too long to respond.")
+        raise RuntimeError("Local model timed out.")
     except Exception as e:
         raise RuntimeError(f"Local provider error: {e}")
 
 
 def ask_local(messages) -> str:
-    """Non-streaming — returns the full response string."""
     return "".join(stream_local(messages))

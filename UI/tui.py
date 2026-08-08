@@ -9,7 +9,6 @@ from pathlib import Path
 from rich.console import Console as RC
 from rich.markdown import Markdown
 from rich.text import Text
-
 from prompt_toolkit import Application
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.layout import Layout
@@ -26,43 +25,28 @@ sys.path.insert(0, str(ROOT))
 from assistant import Assistant  # noqa: E402
 
 HISTORY_FILE = ROOT / ".jarvis_history"
-BUBBLE_RATIO  = 0.52
-
-# Max redraws per second while tokens are arriving (60 fps ceiling).
+BUBBLE_RATIO = 0.52
 INVALIDATE_INTERVAL_S = 0.016
-
-# ── TUI commands ──────────────────────────────────────────────────────────────
 
 _CMDS = {"/exit", "/quit", "/clear", "/new", "/help"}
 
-# ── Global state ──────────────────────────────────────────────────────────────
-
 _lock = threading.Lock()
-
-# Each entry: {"role": ..., "text": ..., "_cache": (cols, str) | None}
-_msgs: list         = []
-_status_text: str   = ""
-_cancel             = threading.Event()
-
-# Throttle (GIL-safe — written only from the stream thread)
+_msgs: list = []
+_status_text: str = ""
+_cancel = threading.Event()
 _last_invalidate: float = 0.0
 
-# ── Thinking animation ────────────────────────────────────────────────────────
-_THINK_FRAMES   = ("◌", "◎", "●", "◎")
-_think_idx      = 0
-_think_timer    = None
-_thinking_on    = False
+_THINK_FRAMES = ("◌", "◎", "●", "◎")
+_think_idx = 0
+_think_timer = None
+_thinking_on = False
 
-# ── Streaming cursor animation ────────────────────────────────────────────────
-# Rendered inline at the end of the live reply so the UI feels alive
-# even when the model is slow.
-_CUR_FRAMES  = ("█", "▌", "▏", " ", "▏", "▌")
-_cur_char    = "█"
-_cur_idx     = 0
-_cur_timer   = None
-_cur_on      = False
+_CUR_FRAMES = ("█", "▌", "▏", " ", "▏", "▌")
+_cur_char = "█"
+_cur_idx = 0
+_cur_timer = None
+_cur_on = False
 
-# ── ANSI helpers ──────────────────────────────────────────────────────────────
 
 def _c(r, g, b):  return f"\033[38;2;{r};{g};{b}m"
 def _bg(r, g, b): return f"\033[48;2;{r};{g};{b}m"
@@ -72,7 +56,6 @@ _BOLD = "\033[1m"
 _BLUE = _c(74, 158, 255)
 _GREY = _c(200, 200, 200)
 
-# ── Terminal size ─────────────────────────────────────────────────────────────
 
 def _size():
     try:
@@ -82,7 +65,6 @@ def _size():
     except Exception:
         return 24, 80
 
-# ── Renderers ─────────────────────────────────────────────────────────────────
 
 def _render_user(text: str, cols: int) -> str:
     max_w = max(20, int(cols * BUBBLE_RATIO))
@@ -90,22 +72,20 @@ def _render_user(text: str, cols: int) -> str:
     for para in text.splitlines():
         lines.extend(textwrap.wrap(para, width=max_w) or [""])
     bw = min(max_w, max((len(l) for l in lines), default=1))
-
-    out   = []
+    out = []
     label = "you"
     out.append(" " * max(0, cols - len(label) - 2) + f"{_DIM}{_GREY}{label}{_R}")
     for line in lines:
         cell = " " + line.ljust(bw) + " "
-        pad  = max(0, cols - len(cell) - 1)
+        pad = max(0, cols - len(cell) - 1)
         out.append(" " * pad + _c(200, 216, 240) + _bg(26, 47, 74) + cell + _R)
     out.append("")
     return "\n".join(out) + "\n"
 
 
 def _render_jarvis_rich(text: str, cols: int) -> str:
-    """Full Rich Markdown — called ONCE per message when streaming ends."""
     buf = io.StringIO()
-    c   = RC(file=buf, force_terminal=True, width=max(20, cols - 4), highlight=False)
+    c = RC(file=buf, force_terminal=True, width=max(20, cols - 4), highlight=False)
     c.print(Text("jarvis", style="dim #4a9eff"))
     c.print(Markdown(text, code_theme="nord"))
     c.print()
@@ -113,48 +93,29 @@ def _render_jarvis_rich(text: str, cols: int) -> str:
 
 
 def _render_jarvis_plain(text: str, cols: int) -> str:
-    """
-    Cheap live render during streaming.
-    • No Markdown parse — just textwrap.
-    • Appends the animated cursor character so the reply looks alive
-      even when the model outputs slowly.
-    • Only produces the lines that will actually be visible (avail rows)
-      so textwrap work scales with viewport, not total reply length.
-    """
     width = max(20, cols - 4)
-
-    # Only wrap what fits in the visible viewport
     rows, _ = _size()
-    avail   = max(4, rows - 4)   # leave room for header/sep/input/status
-
+    avail = max(4, rows - 4)
     wrapped: list[str] = []
     for para in text.splitlines():
         wrapped.extend(textwrap.wrap(para, width=width) or [""])
-
-    # Trim to visible window — older lines have scrolled off anyway
     if len(wrapped) > avail - 1:
         wrapped = wrapped[-(avail - 1):]
-
-    # Append animated cursor on the last content line
     cursor = _c(74, 158, 255) + _cur_char + _R
     if wrapped:
         wrapped[-1] += cursor
     else:
         wrapped = [cursor]
-
-    header = f"{_DIM}{_BLUE}jarvis{_R}\n"
-    return header + "\n".join(wrapped) + "\n\n"
+    return f"{_DIM}{_BLUE}jarvis{_R}\n" + "\n".join(wrapped) + "\n\n"
 
 
 def _render_divider(cols: int) -> str:
     return _c(28, 28, 28) + "─" * cols + _R + "\n\n"
 
 
-# ── Per-message render cache ──────────────────────────────────────────────────
-
 def _get_rendered(msg: dict, cols: int) -> str:
-    role  = msg["role"]
-    text  = msg["text"]
+    role = msg["role"]
+    text = msg["text"]
     cache = msg.get("_cache")
 
     if role == "user":
@@ -172,37 +133,32 @@ def _get_rendered(msg: dict, cols: int) -> str:
         return rendered
 
     if role == "jarvis_stream":
-        return _render_jarvis_plain(text, cols)   # never cached; always fresh
+        return _render_jarvis_plain(text, cols)
 
-    return text  # raw
+    return text
 
-# ── Chat viewport ─────────────────────────────────────────────────────────────
 
 def get_chat() -> ANSI:
     rows, cols = _size()
     avail = max(4, rows - 3)
-
     with _lock:
-        msgs   = list(_msgs)
+        msgs = list(_msgs)
         status = _status_text
-
     parts = [_get_rendered(m, cols) for m in msgs]
     if status:
         parts.append(f"\n  {_c(255,200,50)}{status}{_R}\n")
-
     lines = "".join(parts).split("\n")
     if len(lines) > avail:
         lines = lines[-avail:]
-
     return ANSI("\n".join(lines))
 
 
 def get_header() -> ANSI:
-    _, cols    = _size()
-    now        = datetime.now().strftime("%H:%M")
-    left       = f"  {_BOLD}{_BLUE}jarvis{_R}  {_c(50,205,50)}●{_R}"
+    _, cols = _size()
+    now = datetime.now().strftime("%H:%M")
+    left = f"  {_BOLD}{_BLUE}jarvis{_R}  {_c(50,205,50)}●{_R}"
     left_plain = "  jarvis  ●"
-    gap        = max(0, cols - len(left_plain) - len(now) - 1)
+    gap = max(0, cols - len(left_plain) - len(now) - 1)
     return ANSI(left + " " * gap + f"{_DIM}{now}{_R}")
 
 
@@ -213,7 +169,6 @@ def get_status() -> ANSI:
         return ANSI(f"  {_DIM}{s}{_R}")
     return ANSI(f"  {_DIM}ctrl-d quit  ·  ctrl-c cancel{_R}")
 
-# ── State management ──────────────────────────────────────────────────────────
 
 def _set_status(text: str):
     global _status_text
@@ -242,7 +197,6 @@ def _finalise_stream():
                 _msgs[i].pop("_cache", None)
                 return
 
-# ── Throttled invalidation ────────────────────────────────────────────────────
 
 def _invalidate(app: Application, force: bool = False):
     global _last_invalidate
@@ -251,7 +205,6 @@ def _invalidate(app: Application, force: bool = False):
         _last_invalidate = now
         app.invalidate()
 
-# ── Thinking animation ────────────────────────────────────────────────────────
 
 def _stop_thinking():
     global _think_timer, _thinking_on
@@ -265,8 +218,7 @@ def _tick_thinking(app: Application):
     global _think_idx, _think_timer
     if not _thinking_on:
         return
-    frame = _THINK_FRAMES[_think_idx % len(_THINK_FRAMES)]
-    _set_status(f"{frame}  thinking…")
+    _set_status(f"{_THINK_FRAMES[_think_idx % len(_THINK_FRAMES)]}  thinking…")
     _invalidate(app, force=True)
     _think_idx += 1
     _think_timer = threading.Timer(0.28, _tick_thinking, args=(app,))
@@ -276,15 +228,14 @@ def _tick_thinking(app: Application):
 
 def _start_thinking(app: Application):
     global _think_idx, _thinking_on
-    _think_idx   = 0
+    _think_idx = 0
     _thinking_on = True
     _tick_thinking(app)
 
-# ── Streaming cursor animation ────────────────────────────────────────────────
 
 def _stop_cursor():
     global _cur_timer, _cur_on, _cur_char
-    _cur_on   = False
+    _cur_on = False
     _cur_char = ""
     if _cur_timer:
         _cur_timer.cancel()
@@ -305,12 +256,11 @@ def _tick_cursor(app: Application):
 
 def _start_cursor(app: Application):
     global _cur_idx, _cur_on, _cur_char
-    _cur_idx  = 0
-    _cur_on   = True
+    _cur_idx = 0
+    _cur_on = True
     _cur_char = _CUR_FRAMES[0]
     _tick_cursor(app)
 
-# ── Chat thread ───────────────────────────────────────────────────────────────
 
 def _friendly_error(e: Exception) -> str:
     msg = str(e)
@@ -332,32 +282,28 @@ def _run_chat(text: str, app: Application, jarvis: Assistant):
     _invalidate(app, force=True)
     _start_thinking(app)
 
-    # Use a plain string for the accumulator — CPython optimises '+=' in a loop.
-    buf   = ""
+    buf = ""
     first = True
     try:
         for tok in jarvis.stream(text):
             if _cancel.is_set():
                 break
             buf += tok
-
             if first:
                 _stop_thinking()
                 _set_status("")
                 _add_msg("jarvis_stream", tok)
-                _start_cursor(app)   # begin cursor animation
+                _start_cursor(app)
                 first = False
             else:
                 _update_last_stream(buf)
-
             _invalidate(app)
 
     except Exception as e:
         _stop_thinking()
         _stop_cursor()
-        friendly = _friendly_error(e)
         _set_status("")
-        _add_msg("raw", f"\n  {_c(220,80,80)}error:{_R} {_DIM}{friendly}{_R}\n\n")
+        _add_msg("raw", f"\n  {_c(220,80,80)}error:{_R} {_DIM}{_friendly_error(e)}{_R}\n\n")
         _invalidate(app, force=True)
         return
 
@@ -368,7 +314,6 @@ def _run_chat(text: str, app: Application, jarvis: Assistant):
         _finalise_stream()
     _invalidate(app, force=True)
 
-# ── Command handler ───────────────────────────────────────────────────────────
 
 def _run_command(text: str, app: Application, jarvis: Assistant):
     verb = text.strip().split()[0].lower()
@@ -386,7 +331,7 @@ def _run_command(text: str, app: Application, jarvis: Assistant):
         return
 
     if verb == "/help":
-        raw = (
+        _add_msg("raw", (
             "\n"
             f"  {_BOLD}{_BLUE}commands{_R}\n"
             f"  {_DIM}{'─'*22}{_R}\n"
@@ -394,20 +339,17 @@ def _run_command(text: str, app: Application, jarvis: Assistant):
             f"  {_DIM}/new      fresh session{_R}\n"
             f"  {_DIM}/rt       realtime search  (/rt latest python){_R}\n"
             f"  {_DIM}/exit     quit{_R}\n\n"
-        )
-        _add_msg("raw", raw)
+        ))
         _invalidate(app, force=True)
         return
 
     _add_msg("raw", f"\n  {_c(255,200,50)}unknown:{_R} {text}  — try /help\n\n")
     _invalidate(app, force=True)
 
-# ── Application builder ───────────────────────────────────────────────────────
 
 def build_app(jarvis: Assistant) -> Application:
-    history   = FileHistory(str(HISTORY_FILE))
     input_buf = Buffer(
-        history=history,
+        history=FileHistory(str(HISTORY_FILE)),
         auto_suggest=AutoSuggestFromHistory(),
         multiline=False,
         name="input",
@@ -422,7 +364,7 @@ def build_app(jarvis: Assistant) -> Application:
         if not text:
             return
         verb = text.split()[0].lower()
-        fn   = _run_command if verb in _CMDS else _run_chat
+        fn = _run_command if verb in _CMDS else _run_chat
         threading.Thread(target=fn, args=(text, event.app, jarvis), daemon=True).start()
 
     @kb.add("c-d")
@@ -441,45 +383,28 @@ def build_app(jarvis: Assistant) -> Application:
     def _hist_fwd(event):
         input_buf.history_forward(count=1)
 
-    # ── Layout ────────────────────────────────────────────────────────────────
-
-    header_win = Window(
-        content=FormattedTextControl(get_header),
-        height=1,
-        style="class:header",
-    )
-    chat_win = Window(
-        content=FormattedTextControl(get_chat, focusable=False),
-        wrap_lines=False,
-        style="class:chat",
-    )
-    sep_win = Window(height=1, char="─", style="class:sep")
-    prompt_win = Window(
-        content=FormattedTextControl(lambda: [("class:glyph", "  › ")]),
-        width=5, height=1, style="class:pbar", dont_extend_height=True,
-    )
-    input_win = Window(
-        content=BufferControl(buffer=input_buf),
-        height=1, style="class:pbar", dont_extend_height=True,
-    )
-    status_win = Window(
-        content=FormattedTextControl(get_status),
-        height=1, style="class:status",
-    )
-
     layout = Layout(
-        HSplit([header_win, chat_win, sep_win, VSplit([prompt_win, input_win]), status_win]),
-        focused_element=input_win,
+        HSplit([
+            Window(content=FormattedTextControl(get_header), height=1, style="class:header"),
+            Window(content=FormattedTextControl(get_chat, focusable=False), wrap_lines=False, style="class:chat"),
+            Window(height=1, char="─", style="class:sep"),
+            VSplit([
+                Window(content=FormattedTextControl(lambda: [("class:glyph", "  › ")]), width=5, height=1, style="class:pbar", dont_extend_height=True),
+                Window(content=BufferControl(buffer=input_buf), height=1, style="class:pbar", dont_extend_height=True),
+            ]),
+            Window(content=FormattedTextControl(get_status), height=1, style="class:status"),
+        ]),
+        focused_element=Window(content=BufferControl(buffer=input_buf), height=1),
     )
 
     style = Style.from_dict({
-        "header":  "bg:#070707",
-        "chat":    "bg:#070707",
-        "sep":     "bg:#070707 #181818",
-        "pbar":    "bg:#101010",
-        "glyph":   "bg:#101010 #4a9eff bold",
-        "status":  "bg:#050505",
-        "":        "#c8c8c8 bg:#070707",
+        "header": "bg:#070707",
+        "chat":   "bg:#070707",
+        "sep":    "bg:#070707 #181818",
+        "pbar":   "bg:#101010",
+        "glyph":  "bg:#101010 #4a9eff bold",
+        "status": "bg:#050505",
+        "":       "#c8c8c8 bg:#070707",
     })
 
     return Application(
@@ -488,15 +413,13 @@ def build_app(jarvis: Assistant) -> Application:
         style=style,
         full_screen=True,
         mouse_support=True,
-        refresh_interval=0.5,   # passive; all live updates come from invalidate()
+        refresh_interval=0.5,
     )
 
-# ── Entry ─────────────────────────────────────────────────────────────────────
 
 def main():
     jarvis = Assistant()
-    app    = build_app(jarvis)
-    app.run()
+    build_app(jarvis).run()
 
 
 if __name__ == "__main__":

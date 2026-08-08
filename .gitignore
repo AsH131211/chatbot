@@ -2,17 +2,63 @@
 __pycache__/
 *.py[cod]
 *.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
 
 # Virtual environment
 .venv/
+venv/
+env/
 
 # IDE
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
 
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# Chat history
+# Secrets & environment variables
+.env
+.env.*
+*.key
+*.pem
+secrets.json
+config.local.py
+
+# Runtime data – chat history & memories
 chats/*.json
+memories/*.json
+!memories/default.json
+
+# Jarvis shell history
+.jarvis_history
+
+# Logs
+*.log
+logs/
+
+# Audio / TTS cache
+*.mp3
+*.wav
+*.ogg
+*.opus
+
+# Type stubs / mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
